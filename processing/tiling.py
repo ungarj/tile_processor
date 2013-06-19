@@ -50,6 +50,7 @@ def main(args):
     parser.add_argument("margin", nargs=1, type=int)
     parser.add_argument("dest", nargs=1, type=str)
     parser.add_argument("--create_vrt", action="store_true")
+    parser.add_argument("--naming_srtm", action="store_true")
 
     subparsers = parser.add_subparsers(help='sub-command help')
     fillnodata_parser = subparsers.add_parser("fillnodata")
@@ -115,42 +116,52 @@ def main(args):
             tile_offsety = SOURCE_Y + j*tile_ysize
             #print "srcwin %s %s %s %s" %(tile_offsetx, tile_offsety, tile_xsize, tile_ysize)      
             
-            #TODO calculate metatile boundaries
+            #calculate metatile boundaries
             metatile_offsetx = tile_offsetx - margin
             metatile_xsize = tile_xsize + 2 * margin
-            if (metatile_offsetx < 0):
-                metatile_offsetx = 0
-                metatile_xsize = tile_ysize + margin
 
             metatile_offsety = tile_offsety - margin
             metatile_ysize = tile_ysize + 2 * margin
-            if (metatile_offsety < 0):
-                metatile_offsety = 0
-                metatile_ysize = tile_ysize + margin
 
-            cropx=False
-            cropy=False
+            #TODO crop to tile boundaries & save
+            save_offsetx = margin
+            save_offsety = margin
+            save_xsize = tile_xsize
+            save_ysize = tile_ysize
+            #print "cropx = " + str(cropx)
+            #print "cropx = " + str(cropy)
+
+            # clip metatile if outside of input file's boundaries
+            # if negative, set save_offset to 0 and make metatile-margin
+            # if out of max, make metatile-margin
+            if (metatile_offsetx<0):
+                metatile_offsetx=0
+                save_offsetx=0
+                metatile_xsize=metatile_xsize-margin
+                print "CROP X"
+
+            if (metatile_offsety<0):
+                metatile_offsety=0
+                save_offsety=0
+                metatile_ysize=metatile_ysize-margin
+                print "CROP Y"
 
             if (metatile_offsetx+metatile_xsize > vrt_xsize):
                 metatile_xsize = metatile_xsize - margin
-                
+
             if (metatile_offsety+metatile_ysize > vrt_ysize):
                 metatile_ysize = metatile_ysize - margin
-
-            if (metatile_offsetx == 0):
-                metatile_xsize = metatile_xsize - margin
-                cropx = True
-                
-            if (metatile_offsety == 0):
-                metatile_ysize = metatile_ysize - margin
-                cropy = True
 
             band = ds.GetRasterBand(1)
             nodata = int(band.GetNoDataValue())
             data = numpy.array(band.ReadAsArray(tile_offsetx, tile_offsety, tile_xsize, tile_ysize))
             #print "%s %s %s %s" %(tile_offsetx, tile_offsety, tile_xsize, tile_ysize)
+            #print "nodata: %s" %(nodata)
+            print data
+            print "%s %s" %(tile_xsize, tile_ysize)
             
             # skip if tile is empty
+            data[data==0]=nodata
             if numpy.all(data==nodata):
                 print "nothing to be written\n"
             else:
@@ -161,23 +172,36 @@ def main(args):
                 print save_metatile
                 os.system(save_metatile)
 
-                #TODO crop to tile boundaries & save
-                save_offsetx = margin
-                save_offsety = margin
-                save_xsize = tile_xsize
-                save_ysize = tile_ysize
-                #print "cropx = " + str(cropx)
-                #print "cropx = " + str(cropy)
-                if (cropx==True):
-                    save_offsetx = 0
-                if (cropy==True):
-                    save_offsety = 0
-
                 if not os.path.exists(dest):
                     os.makedirs(dest)      
                 target = dest+"X"+str(i).zfill(DIGITS)+"Y"+str(j).zfill(DIGITS)+".tif"
 
                 ot = ""
+
+                if parsed.naming_srtm:
+                    #print "save as SRTM named tile"
+                    geotransform = ds.GetGeoTransform(1)
+                    xpixelsize = geotransform[1]
+                    ypixelsize = geotransform[5]
+                    xorigin = geotransform[0]
+                    yorigin = geotransform[3]
+                    lon_character = "E"
+                    lat_character = "N"
+
+                    lon_number = int(round(xorigin + xpixelsize*tile_offsetx))
+                    if lon_number<0:
+                        lon_number=-lon_number
+                        lon_character = "W"
+
+                    lat_number = int(round(yorigin + ypixelsize*(tile_offsety+tile_ysize)))
+                    if lat_number<0:
+                        lat_number=-lat_number
+                        lat_character = "S"
+
+                    #lon_number_formated = str(lon_number).zfill(3)
+                    #lat_number_formated = str(lat_number).zfill(2)
+                    #print "%s %s %s %s" %(lat_character, lat_number_formated, lon_character, lon_number_formated)
+                    target = dest+lat_character+str(lat_number).zfill(2)+lon_character+str(lon_number).zfill(3)+".tif"
 
 
                 #TODO apply processing
@@ -203,10 +227,8 @@ def main(args):
                     nodata = 0
                     ot = "-ot Byte"
 
-                    data_numpy = numpy_read(temp_processed)
+                    _, gt, _, nodata, array_numpy = numpy_read(temp_processed)
 
-                    array_numpy = data_numpy[4]
-                    nodata = data_numpy[3]
                     print array_numpy
 
                     print nodata
@@ -219,12 +241,12 @@ def main(args):
                     array_numpy = -(array_numpy.astype(numpy.uint8)-255)
                     array_numpy[array_numpy==0] = 255
 
-                    print array_numpy
+                    print array_numpy.shape
 
-                    processed_numpy = data_numpy
+                    processed_numpy = array_numpy
                     #print processed_numpy[1][3]
 
-                    numpy_save(processed_numpy, target, save_offsetx, save_offsety, save_xsize, save_ysize, nodata, ot)
+                    numpy_save(processed_numpy, target, save_offsetx, save_offsety, save_xsize, save_ysize, gt, nodata, ot)
 
                 if (parsed.method == "fillnodata"):
                     process_fillnodata = "gdal_fillnodata.py %s %s" %(temp_metatile, temp_processed)
@@ -234,18 +256,21 @@ def main(args):
                     tiff_save(temp_processed, target, save_offsetx, save_offsety, save_xsize, save_ysize, nodata, ot)
 
                 if (parsed.method == "rescale"):
-                    xscale = int(parsed.x)*tile_xsize
-                    yscale = int(parsed.y)*tile_ysize
+                    xscale = int(parsed.x)
+                    yscale = int(parsed.y)
                     interpolation = parsed.i
 
-                    process_rescale = "gdalwarp -ts %s %s -r %s -overwrite %s -of GTiff %s" %(xscale, yscale, interpolation, temp_metatile, temp_processed)
+                    rescaled_xsize = xscale*metatile_xsize
+                    rescaled_ysize = yscale*metatile_ysize
+
+                    process_rescale = "gdalwarp -ts %s %s -r %s -overwrite %s -of GTiff %s -srcnodata %s -dstnodata %s -multi" %(rescaled_xsize, rescaled_ysize, interpolation, temp_metatile, temp_processed, nodata, nodata)
                     print process_rescale
                     os.system(process_rescale)
 
-                    save_offsetx = save_offsetx*3
-                    save_offsety = save_offsety*3
-                    save_xsize = save_xsize*3
-                    save_ysize = save_ysize*3
+                    save_offsetx = save_offsetx*xscale
+                    save_offsety = save_offsety*yscale
+                    save_xsize = save_xsize*xscale
+                    save_ysize = save_ysize*yscale
 
                     tiff_save(temp_processed, target, save_offsetx, save_offsety, save_xsize, save_ysize, nodata, ot)
 
@@ -259,8 +284,8 @@ def main(args):
     # create VRT
     if parsed.create_vrt:
         target_vrt = dest.rsplit("/")[0] + ".vrt"
-        target_tiffs = dest + "*"
-        create_vrt = "gdalbuildvrt -overwrite %s %s -vrtnodata %s" %(target_vrt, target_tiffs, nodata)
+        target_tiffs = dest + "*.tif"
+        create_vrt = "gdalbuildvrt -overwrite %s %s" %(target_vrt, target_tiffs)
         print create_vrt
         os.system(create_vrt)
 
@@ -284,20 +309,42 @@ def numpy_read(gtiff):
 
     return temp_ds, temp_geotransform, temp_band, temp_nodata, temp_data
 
-def numpy_save(processed_numpy, target, save_offsetx, save_offsety, save_xsize, save_ysize, nodata, ot):
+def numpy_save(processed_numpy, target, save_offsetx, save_offsety, save_xsize, save_ysize, geotransform_original, nodata, ot):
     #TODO save numpy array as GTiff
     #xmin,ymin,xmax,ymax = 
-    xmin = processed_numpy[1][0]
-    ymax = processed_numpy[1][3]
-    nrows,ncols = numpy.shape(processed_numpy[4])
-    xres = processed_numpy[1][1]
-    yres = -processed_numpy[1][5]
-    geotransform=(xmin,xres,0,ymax,0, -yres)   
+
+    print type(processed_numpy)
+
+    print processed_numpy.shape
+
+    print save_offsetx, save_offsety, save_xsize, save_ysize
+
+    #cut_array = processed_numpy[save_offsetx:save_offsetx + save_xsize, save_offsety:save_offsety + save_ysize]
+    cut_array = processed_numpy[save_offsety:save_offsety + save_ysize, save_offsetx:save_offsetx + save_xsize]
+
+    print "cut: ", cut_array.shape
+
+
+    #xmin = processed_numpy[1][0]
+    #ymax = processed_numpy[1][3]
+    #nrows,ncols = numpy.shape(processed_numpy[4])
+    #xres = processed_numpy[1][1]
+    #yres = -processed_numpy[1][5]
+    #geotransform=(xmin,xres,0,ymax,0, -yres)   
     # That's (top left x, w-e pixel resolution, rotation (0 if North is up), 
     #         top left y, rotation (0 if North is up), n-s pixel resolution)
     # I don't know why rotation is in twice???
 
-    output_raster = gdal.GetDriverByName('GTiff').Create(target,ncols, nrows, 1 ,gdal.GDT_Byte)  # Open the file
+    geotransform = [
+        geotransform_original[0] + geotransform_original[1] * save_offsetx,
+        geotransform_original[1],
+        geotransform_original[2],
+        geotransform_original[3] + geotransform_original[5] * save_offsety,
+        geotransform_original[4],
+        geotransform_original[5]
+    ]
+
+    output_raster = gdal.GetDriverByName('GTiff').Create(target, save_xsize, save_ysize, 1, gdal.GDT_Byte)  # Open the file
     output_raster.SetGeoTransform(geotransform)  # Specify its coordinates
     srs = osr.SpatialReference()                 # Establish its coordinate encoding
     srs.ImportFromEPSG(4326)                     # This one specifies WGS84 lat long.
@@ -306,7 +353,7 @@ def numpy_save(processed_numpy, target, save_offsetx, save_offsety, save_xsize, 
     output_raster.SetProjection( srs.ExportToWkt() )   # Exports the coordinate system 
                                                        # to the file
     #print "xmin %s ymax %s nrows %s ncols %s xres %s yres %s" %(xmin, ymax, nrows, ncols, xres, yres)
-    output_raster.GetRasterBand(1).WriteArray(processed_numpy[4])   # Writes my array to the raster
+    output_raster.GetRasterBand(1).WriteArray(cut_array)   # Writes my array to the raster
 
 if __name__ == "__main__":
         main(sys.argv[1:])
