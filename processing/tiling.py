@@ -51,6 +51,7 @@ def main(args):
     parser.add_argument("dest", nargs=1, type=str)
     parser.add_argument("--create_vrt", action="store_true")
     parser.add_argument("--naming_srtm", action="store_true")
+    parser.add_argument("--resume", action="store_true")
 
     subparsers = parser.add_subparsers(help='sub-command help')
     fillnodata_parser = subparsers.add_parser("fillnodata")
@@ -77,7 +78,7 @@ def main(args):
 
     parsed = parser.parse_args(args)
 
-    print parsed.method
+    #print parsed.method
 
     source_vrt = parsed.source_vrt[0]
     source = str(source_vrt)
@@ -86,7 +87,7 @@ def main(args):
     margin = parsed.margin[0]
     dest = parsed.dest[0]
 
-    print parsed.create_vrt
+    #print parsed.create_vrt
     
     ds = gdal.Open(source, GA_ReadOnly)
 
@@ -106,15 +107,9 @@ def main(args):
     for i in range(0,tile_count_x):
         for j in range(0,tile_count_y):
 
-#    for i in range(0,10):
-#        for j in range(0,10):
-
-            # pass if tile will contain exclusively nodata values
-
             # determine tile boundaries
             tile_offsetx = SOURCE_X + i*tile_xsize
             tile_offsety = SOURCE_Y + j*tile_ysize
-            #print "srcwin %s %s %s %s" %(tile_offsetx, tile_offsety, tile_xsize, tile_ysize)      
             
             #calculate metatile boundaries
             metatile_offsetx = tile_offsetx - margin
@@ -128,8 +123,6 @@ def main(args):
             save_offsety = margin
             save_xsize = tile_xsize
             save_ysize = tile_ysize
-            #print "cropx = " + str(cropx)
-            #print "cropx = " + str(cropy)
 
             # clip metatile if outside of input file's boundaries
             # if negative, set save_offset to 0 and make metatile-margin
@@ -138,13 +131,13 @@ def main(args):
                 metatile_offsetx=0
                 save_offsetx=0
                 metatile_xsize=metatile_xsize-margin
-                print "CROP X"
+                #print "CROP X"
 
             if (metatile_offsety<0):
                 metatile_offsety=0
                 save_offsety=0
                 metatile_ysize=metatile_ysize-margin
-                print "CROP Y"
+                #print "CROP Y"
 
             if (metatile_offsetx+metatile_xsize > vrt_xsize):
                 metatile_xsize = metatile_xsize - margin
@@ -155,16 +148,50 @@ def main(args):
             band = ds.GetRasterBand(1)
             nodata = int(band.GetNoDataValue())
             data = numpy.array(band.ReadAsArray(tile_offsetx, tile_offsety, tile_xsize, tile_ysize))
-            #print "%s %s %s %s" %(tile_offsetx, tile_offsety, tile_xsize, tile_ysize)
-            #print "nodata: %s" %(nodata)
-            print data
-            print "%s %s" %(tile_xsize, tile_ysize)
+
+
+            # define output tile name
+            target = dest+"X"+str(i).zfill(DIGITS)+"Y"+str(j).zfill(DIGITS)+".tif"
+
+            ot = ""
+
+            if parsed.naming_srtm:
+                #print "save as SRTM named tile"
+                geotransform = ds.GetGeoTransform(1)
+                xpixelsize = geotransform[1]
+                ypixelsize = geotransform[5]
+                xorigin = geotransform[0]
+                yorigin = geotransform[3]
+                lon_character = "E"
+                lat_character = "N"
+
+                lon_number = int(round(xorigin + xpixelsize*tile_offsetx))
+                if lon_number<0:
+                    lon_number=-lon_number
+                    lon_character = "W"
+
+                lat_number = int(round(yorigin + ypixelsize*(tile_offsety+tile_ysize)))
+                if lat_number<0:
+                    lat_number=-lat_number
+                    lat_character = "S"
+
+                target = dest+lat_character+str(lat_number).zfill(2)+lon_character+str(lon_number).zfill(3)+".tif"
+
+            tile_exists = False
+            if parsed.resume:
+                #check whether target tile exists
+                tile_exists = os.path.isfile(target)
             
+            print "\n"
+            print "processing tile " + target
+
             # skip if tile is empty
             data[data==0]=nodata
             if numpy.all(data==nodata):
-                print "nothing to be written\n"
-            else:
+                print "source data empty, skipping"
+            if (tile_exists==True):
+                print "tile exists, skipping"    
+            else:                
                 print "data found"
                 #print "srcwin %s %s %s %s" %(metatile_offsetx, metatile_offsety, metatile_xsize, metatile_ysize)
 
@@ -174,36 +201,7 @@ def main(args):
 
                 if not os.path.exists(dest):
                     os.makedirs(dest)      
-                target = dest+"X"+str(i).zfill(DIGITS)+"Y"+str(j).zfill(DIGITS)+".tif"
-
-                ot = ""
-
-                if parsed.naming_srtm:
-                    #print "save as SRTM named tile"
-                    geotransform = ds.GetGeoTransform(1)
-                    xpixelsize = geotransform[1]
-                    ypixelsize = geotransform[5]
-                    xorigin = geotransform[0]
-                    yorigin = geotransform[3]
-                    lon_character = "E"
-                    lat_character = "N"
-
-                    lon_number = int(round(xorigin + xpixelsize*tile_offsetx))
-                    if lon_number<0:
-                        lon_number=-lon_number
-                        lon_character = "W"
-
-                    lat_number = int(round(yorigin + ypixelsize*(tile_offsety+tile_ysize)))
-                    if lat_number<0:
-                        lat_number=-lat_number
-                        lat_character = "S"
-
-                    #lon_number_formated = str(lon_number).zfill(3)
-                    #lat_number_formated = str(lat_number).zfill(2)
-                    #print "%s %s %s %s" %(lat_character, lat_number_formated, lon_character, lon_number_formated)
-                    target = dest+lat_character+str(lat_number).zfill(2)+lon_character+str(lon_number).zfill(3)+".tif"
-
-
+                
                 #TODO apply processing
 
                 if (parsed.method == "hillshade"):
@@ -229,9 +227,9 @@ def main(args):
 
                     _, gt, _, nodata, array_numpy = numpy_read(temp_processed)
 
-                    print array_numpy
+                    #print array_numpy
 
-                    print nodata
+                    #print nodata
 
                     # replace nodata values with 0
                     #for i in numpy.iteritems():
@@ -241,7 +239,7 @@ def main(args):
                     array_numpy = -(array_numpy.astype(numpy.uint8)-255)
                     array_numpy[array_numpy==0] = 255
 
-                    print array_numpy.shape
+                    #print array_numpy.shape
 
                     processed_numpy = array_numpy
                     #print processed_numpy[1][3]
@@ -313,16 +311,16 @@ def numpy_save(processed_numpy, target, save_offsetx, save_offsety, save_xsize, 
     #TODO save numpy array as GTiff
     #xmin,ymin,xmax,ymax = 
 
-    print type(processed_numpy)
+    #print type(processed_numpy)
 
-    print processed_numpy.shape
+    #print processed_numpy.shape
 
-    print save_offsetx, save_offsety, save_xsize, save_ysize
+    #print save_offsetx, save_offsety, save_xsize, save_ysize
 
     #cut_array = processed_numpy[save_offsetx:save_offsetx + save_xsize, save_offsety:save_offsety + save_ysize]
     cut_array = processed_numpy[save_offsety:save_offsety + save_ysize, save_offsetx:save_offsetx + save_xsize]
 
-    print "cut: ", cut_array.shape
+    #print "cut: ", cut_array.shape
 
 
     #xmin = processed_numpy[1][0]
