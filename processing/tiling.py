@@ -189,7 +189,7 @@ def main(args):
             data[data==0]=nodata
             if numpy.all(data==nodata):
                 print "source data empty, skipping"
-            if (tile_exists==True):
+            elif (tile_exists==True):
                 print "tile exists, skipping"    
             else:                
                 print "data found"
