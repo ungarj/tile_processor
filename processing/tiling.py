@@ -254,12 +254,12 @@ def main(args):
                     tiff_save(temp_processed, target, save_offsetx, save_offsety, save_xsize, save_ysize, nodata, ot)
 
                 if (parsed.method == "rescale"):
-                    xscale = int(parsed.x)
-                    yscale = int(parsed.y)
+                    xscale = float(parsed.x)
+                    yscale = float(parsed.y)
                     interpolation = parsed.i
 
-                    rescaled_xsize = xscale*metatile_xsize
-                    rescaled_ysize = yscale*metatile_ysize
+                    rescaled_xsize = int(xscale*metatile_xsize)
+                    rescaled_ysize = int(yscale*metatile_ysize)
 
                     process_rescale = "gdalwarp -ts %s %s -r %s -overwrite %s -of GTiff %s -srcnodata %s -dstnodata %s -multi" %(rescaled_xsize, rescaled_ysize, interpolation, temp_metatile, temp_processed, nodata, nodata)
                     print process_rescale
@@ -302,7 +302,7 @@ def numpy_read(gtiff):
     temp_geotransform = temp_ds.GetGeoTransform()
 
     temp_band = temp_ds.GetRasterBand(1)
-    temp_nodata = int(temp_band.GetNoDataValue())
+    temp_nodata = int(temp_band.GetNoDataValue() or 0)
     temp_data = numpy.array(temp_band.ReadAsArray())
 
     return temp_ds, temp_geotransform, temp_band, temp_nodata, temp_data
