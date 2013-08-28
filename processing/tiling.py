@@ -146,7 +146,7 @@ def main(args):
                 metatile_ysize = metatile_ysize - margin
 
             band = ds.GetRasterBand(1)
-            nodata = int(band.GetNoDataValue())
+            nodata = int(band.GetNoDataValue() or 0)
             data = numpy.array(band.ReadAsArray(tile_offsetx, tile_offsety, tile_xsize, tile_ysize))
 
 
