@@ -154,8 +154,8 @@ def main(args):
             if (metatile_offsety+metatile_ysize > vrt_ysize):
                 metatile_ysize = metatile_ysize - margin
 
-            print metatile_xsize
-            print metatile_ysize
+            #print metatile_xsize
+            #print metatile_ysize
 
             band = ds.GetRasterBand(1)
             nodata = int(band.GetNoDataValue() or 0)
@@ -204,11 +204,11 @@ def main(args):
             elif (tile_exists==True):
                 print "tile exists, skipping"    
             else:                
-                print "data found"
+                #print "data found"
                 #print "srcwin %s %s %s %s" %(metatile_offsetx, metatile_offsety, metatile_xsize, metatile_ysize)
 
-                save_metatile = "gdal_translate %s -of GTiff %s -srcwin %s %s %s %s" %(source_vrt, temp_metatile, metatile_offsetx, metatile_offsety, metatile_xsize, metatile_ysize)
-                print save_metatile
+                save_metatile = "gdal_translate %s -of GTiff %s -srcwin %s %s %s %s > /dev/null" %(source_vrt, temp_metatile, metatile_offsetx, metatile_offsety, metatile_xsize, metatile_ysize)
+                #print save_metatile
                 os.system(save_metatile)
 
                 if not os.path.exists(dest):
@@ -221,8 +221,8 @@ def main(args):
                     zfactor = parsed.z
                     altitude = parsed.alt
 
-                    process_hillshade = "gdaldem hillshade -s %s -z %s -alt %s %s -of GTiff %s" %(scale, zfactor, altitude, temp_metatile, temp_processed)
-                    print process_hillshade
+                    process_hillshade = "gdaldem hillshade -s %s -z %s -alt %s %s -of GTiff %s > /dev/null" %(scale, zfactor, altitude, temp_metatile, temp_processed)
+                    #print process_hillshade
                     os.system(process_hillshade)
 
                     tiff_save(temp_processed, target, save_offsetx, save_offsety, save_xsize, save_ysize, nodata, ot)
@@ -230,8 +230,8 @@ def main(args):
                 if (parsed.method == "slopeshade"):
                     scale = parsed.s
 
-                    process_slopeshade = "gdaldem slope -s %s %s -of GTiff %s" %(scale, temp_metatile, temp_processed)
-                    print process_slopeshade
+                    process_slopeshade = "gdaldem slope -s %s %s -of GTiff %s > /dev/null" %(scale, temp_metatile, temp_processed)
+                    #print process_slopeshade
                     os.system(process_slopeshade)
 
                     nodata = 0
@@ -259,8 +259,8 @@ def main(args):
                     numpy_save(processed_numpy, target, save_offsetx, save_offsety, save_xsize, save_ysize, gt, nodata, ot)
 
                 if (parsed.method == "fillnodata"):
-                    process_fillnodata = "gdal_fillnodata.py %s %s" %(temp_metatile, temp_processed)
-                    print process_fillnodata
+                    process_fillnodata = "gdal_fillnodata.py %s %s > /dev/null" %(temp_metatile, temp_processed)
+                    #print process_fillnodata
                     os.system(process_fillnodata)
 
                     tiff_save(temp_processed, target, save_offsetx, save_offsety, save_xsize, save_ysize, nodata, ot)
@@ -273,8 +273,8 @@ def main(args):
                     rescaled_xsize = xscale
                     rescaled_ysize = yscale
 
-                    process_rescale = "gdalwarp -ts %s %s -r %s -overwrite %s -of GTiff %s -srcnodata %s -dstnodata %s -multi" %(rescaled_xsize, rescaled_ysize, interpolation, temp_metatile, temp_processed, nodata, nodata)
-                    print process_rescale
+                    process_rescale = "gdalwarp -ts %s %s -r %s -overwrite %s -of GTiff %s -srcnodata %s -dstnodata %s -multi > /dev/null" %(rescaled_xsize, rescaled_ysize, interpolation, temp_metatile, temp_processed, nodata, nodata)
+                    #print process_rescale
                     os.system(process_rescale)
 
                     save_offsetx = save_offsetx
@@ -304,8 +304,8 @@ def main(args):
     os.system(clean)
 
 def tiff_save(temp_processed, target, save_offsetx, save_offsety, save_xsize, save_ysize, nodata, ot):
-    save_tile = "gdal_translate -co compress=lzw %s -of GTiff %s -srcwin %s %s %s %s -a_nodata %s %s" %(temp_processed, target, save_offsetx, save_offsety, save_xsize, save_ysize, nodata, ot)
-    print save_tile
+    save_tile = "gdal_translate -co compress=lzw %s -of GTiff %s -srcwin %s %s %s %s -a_nodata %s %s > /dev/null" %(temp_processed, target, save_offsetx, save_offsety, save_xsize, save_ysize, nodata, ot)
+    #print save_tile
     os.system(save_tile)
 
 def numpy_read(gtiff):
