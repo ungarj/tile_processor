@@ -96,21 +96,30 @@ def main(args):
     vrt_ysize = ds.RasterYSize
     print vrt_xsize, vrt_ysize
 
-    #TODO determine tile numbers
-    tile_count_x = int(vrt_xsize / tile_xsize)
-    tile_count_y = int(vrt_ysize / tile_ysize)
+    # determine tile numbers
+    tile_count_x = int(numpy.ceil(float(vrt_xsize)/float(tile_xsize)))
+    tile_count_y = int(numpy.ceil(float(vrt_ysize)/float(tile_ysize)))
     print tile_count_x, tile_count_y
-
+    
     temp_metatile = "temp_metatile.tif"
     temp_processed = "temp_processed.tif"
 
     for i in range(0,tile_count_x):
         for j in range(0,tile_count_y):
 
+            tile_xsize = parsed.tile_xsize[0]
+            tile_ysize = parsed.tile_ysize[0]
+
             # determine tile boundaries
             tile_offsetx = SOURCE_X + i*tile_xsize
             tile_offsety = SOURCE_Y + j*tile_ysize
-            
+
+            # reduce tile size if end of column/row                
+            if i==tile_count_x-1 and (vrt_xsize-(i*tile_xsize)!=0):
+                tile_xsize = vrt_xsize-i*tile_xsize            
+            if j==tile_count_y-1 and (vrt_ysize-(j*tile_ysize)!=0):
+                tile_ysize = vrt_ysize-j*tile_ysize
+
             #calculate metatile boundaries
             metatile_offsetx = tile_offsetx - margin
             metatile_xsize = tile_xsize + 2 * margin
@@ -123,7 +132,7 @@ def main(args):
             save_offsety = margin
             save_xsize = tile_xsize
             save_ysize = tile_ysize
-
+                
             # clip metatile if outside of input file's boundaries
             # if negative, set save_offset to 0 and make metatile-margin
             # if out of max, make metatile-margin
@@ -144,6 +153,9 @@ def main(args):
 
             if (metatile_offsety+metatile_ysize > vrt_ysize):
                 metatile_ysize = metatile_ysize - margin
+
+            print metatile_xsize
+            print metatile_ysize
 
             band = ds.GetRasterBand(1)
             nodata = int(band.GetNoDataValue() or 0)
