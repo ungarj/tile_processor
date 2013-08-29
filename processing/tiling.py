@@ -258,17 +258,17 @@ def main(args):
                     yscale = float(parsed.y)
                     interpolation = parsed.i
 
-                    rescaled_xsize = int(xscale*metatile_xsize)
-                    rescaled_ysize = int(yscale*metatile_ysize)
+                    rescaled_xsize = xscale
+                    rescaled_ysize = yscale
 
                     process_rescale = "gdalwarp -ts %s %s -r %s -overwrite %s -of GTiff %s -srcnodata %s -dstnodata %s -multi" %(rescaled_xsize, rescaled_ysize, interpolation, temp_metatile, temp_processed, nodata, nodata)
                     print process_rescale
                     os.system(process_rescale)
 
-                    save_offsetx = save_offsetx*xscale
-                    save_offsety = save_offsety*yscale
-                    save_xsize = save_xsize*xscale
-                    save_ysize = save_ysize*yscale
+                    save_offsetx = save_offsetx
+                    save_offsety = save_offsety
+                    save_xsize = xscale
+                    save_ysize = yscale
 
                     tiff_save(temp_processed, target, save_offsetx, save_offsety, save_xsize, save_ysize, nodata, ot)
 
