@@ -171,8 +171,8 @@ def main(args):
             if (metatile_offsety+metatile_ysize > vrt_ysize):
                 metatile_ysize = metatile_ysize - margin
 
-            print metatile_xsize
-            print metatile_ysize
+            #print metatile_xsize
+            #print metatile_ysize
 
             band = ds.GetRasterBand(1)
             nodata = int(band.GetNoDataValue() or 0)
@@ -280,16 +280,16 @@ def main(args):
                     scalefactor = xresolution/tile_xsize
                     rescaled_xsize = int(metatile_xsize*xscale)
                     rescaled_ysize = int(metatile_ysize*yscale)
-                    print rescaled_xsize, rescaled_ysize
+                    #print rescaled_xsize, rescaled_ysize
 
                     process_rescale = "gdalwarp -ts %s %s -r %s -overwrite %s -of GTiff %s -srcnodata %s -dstnodata %s -multi > /dev/null" %(rescaled_xsize, rescaled_ysize, interpolation, temp_metatile, temp_processed, nodata, nodata)
-                    print process_rescale
+                    #print process_rescale
                     os.system(process_rescale)
 
                     save_offsetx = int(save_offsetx*xscale)
                     save_offsety = int(save_offsety*yscale)
-                    save_xsize = rescaled_xsize
-                    save_ysize = rescaled_ysize
+                    save_xsize = int(save_xsize*xscale)
+                    save_ysize = int(save_ysize*yscale)
 
                     tiff_save(temp_processed, target, save_offsetx, save_offsety, save_xsize, save_ysize, nodata, ot)
 
@@ -314,7 +314,7 @@ def main(args):
 
 def tiff_save(temp_processed, target, save_offsetx, save_offsety, save_xsize, save_ysize, nodata, ot):
     save_tile = "gdal_translate -co compress=lzw %s -of GTiff %s -srcwin %s %s %s %s -a_nodata %s %s > /dev/null" %(temp_processed, target, save_offsetx, save_offsety, save_xsize, save_ysize, nodata, ot)
-    print save_tile
+    #print save_tile
     os.system(save_tile)
 
 def numpy_read(gtiff):
