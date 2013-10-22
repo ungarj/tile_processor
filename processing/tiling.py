@@ -220,16 +220,16 @@ def main(args):
                 print "source data empty, skipping"
             elif (tile_exists==True):
                 print "tile exists, skipping"    
-            else:                
+            else:           
+                if not os.path.exists(dest):
+                    os.makedirs(dest) 
+                open(target, 'a').close()     
                 #print "data found"
                 #print "srcwin %s %s %s %s" %(metatile_offsetx, metatile_offsety, metatile_xsize, metatile_ysize)
 
                 save_metatile = "gdal_translate %s -of GTiff %s -srcwin %s %s %s %s > /dev/null" %(source_vrt, temp_metatile, metatile_offsetx, metatile_offsety, metatile_xsize, metatile_ysize)
                 #print save_metatile
                 os.system(save_metatile)
-
-                if not os.path.exists(dest):
-                    os.makedirs(dest)      
                 
                 #TODO apply processing
 
