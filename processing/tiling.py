@@ -26,13 +26,14 @@ import sys
 import argparse
 import os
 import tempfile
+import subprocess
+import numpy
 import osgeo.gdal as gdal
 import osgeo.gdalconst as gdalconst
 from osgeo.gdalconst import *
-import subprocess
-import numpy
-#from numpy import *
 import osr
+import plugins
+import pkgutil
 
 # Configuration
 # =============
@@ -44,6 +45,7 @@ DIGITS=3
 
 
 def main(args):
+
     parser = argparse.ArgumentParser()
     parser.add_argument("source_vrt", nargs=1, type=str)
     parser.add_argument("tile_xsize", nargs=1, type=int)
@@ -55,27 +57,16 @@ def main(args):
     parser.add_argument("--resume", action="store_true")
 
     subparsers = parser.add_subparsers(help='sub-command help')
-    fillnodata_parser = subparsers.add_parser("fillnodata")
-    hillshade_parser = subparsers.add_parser("hillshade")
-    slopeshade_parser = subparsers.add_parser("slopeshade")
-    rescale_parser = subparsers.add_parser("rescale")
-    tiling_parser = subparsers.add_parser("tiling")
 
-    hillshade_parser.add_argument("-s", required=True)
-    hillshade_parser.add_argument("-z", required=True)
-    hillshade_parser.add_argument("--alt", required=True)
+    loaded_plugins = {}
 
-    slopeshade_parser.add_argument("-s")
+    for loader, module_name, ispkg in pkgutil.iter_modules(plugins.__path__):
+        plugin = loader.find_module(module_name).load_module(module_name)
 
-    rescale_parser.add_argument("-x", required=True)
-    rescale_parser.add_argument("-y", required=True)
-    rescale_parser.add_argument("-i", required=True)
-
-    fillnodata_parser.set_defaults(method="fillnodata")
-    hillshade_parser.set_defaults(method="hillshade")
-    slopeshade_parser.set_defaults(method="slopeshade")
-    rescale_parser.set_defaults(method="rescale")
-    tiling_parser.set_defaults(method="tiling")
+        subparser = subparsers.add_parser(module_name)
+        plugin.config_subparser(subparser)
+        subparser.set_defaults(method=module_name)
+        loaded_plugins[module_name] = plugin
 
     parsed = parser.parse_args(args)
 
@@ -104,11 +95,8 @@ def main(args):
     
     temp_metatile = tempfile.mktemp()#= "temp_metatile.tif"
     temp_processed = tempfile.mktemp() #"temp_processed.tif"
-    
+
     if (parsed.method == "rescale"):
-        # determine scalefactor
-        tile_xsize = parsed.tile_xsize[0]
-        tile_ysize = parsed.tile_ysize[0]
 
         xresolution = float(parsed.x)
         yresolution = float(parsed.y)
@@ -157,22 +145,17 @@ def main(args):
                 metatile_offsetx=0
                 save_offsetx=0
                 metatile_xsize=metatile_xsize-margin
-                #print "CROP X"
 
             if (metatile_offsety<0):
                 metatile_offsety=0
                 save_offsety=0
                 metatile_ysize=metatile_ysize-margin
-                #print "CROP Y"
 
             if (metatile_offsetx+metatile_xsize > vrt_xsize):
                 metatile_xsize = metatile_xsize - margin
 
             if (metatile_offsety+metatile_ysize > vrt_ysize):
                 metatile_ysize = metatile_ysize - margin
-
-            #print metatile_xsize
-            #print metatile_ysize
 
             band = ds.GetRasterBand(1)
             nodata = int(band.GetNoDataValue() or 0)
@@ -185,7 +168,6 @@ def main(args):
             ot = ""
 
             if parsed.naming_srtm:
-                #print "save as SRTM named tile"
                 geotransform = ds.GetGeoTransform(1)
                 xpixelsize = geotransform[1]
                 ypixelsize = geotransform[5]
@@ -224,79 +206,11 @@ def main(args):
                 if not os.path.exists(dest):
                     os.makedirs(dest) 
                 open(target, 'a').close()     
-                #print "data found"
-                #print "srcwin %s %s %s %s" %(metatile_offsetx, metatile_offsety, metatile_xsize, metatile_ysize)
 
                 save_metatile = "gdal_translate %s -of GTiff %s -srcwin %s %s %s %s > /dev/null" %(source_vrt, temp_metatile, metatile_offsetx, metatile_offsety, metatile_xsize, metatile_ysize)
-                #print save_metatile
                 os.system(save_metatile)
                 
-                #TODO apply processing
-
-                if (parsed.method == "hillshade"):
-                    scale = parsed.s
-                    zfactor = parsed.z
-                    altitude = parsed.alt
-
-                    process_hillshade = "gdaldem hillshade -s %s -z %s -alt %s %s -of GTiff %s > /dev/null" %(scale, zfactor, altitude, temp_metatile, temp_processed)
-                    #print process_hillshade
-                    os.system(process_hillshade)
-
-                    tiff_save(temp_processed, target, save_offsetx, save_offsety, save_xsize, save_ysize, nodata, ot)
-
-                if (parsed.method == "slopeshade"):
-                    scale = parsed.s
-
-                    process_slopeshade = "gdaldem slope -s %s %s -of GTiff %s > /dev/null" %(scale, temp_metatile, temp_processed)
-                    os.system(process_slopeshade)
-
-                    nodata = 0
-                    ot = "-ot Byte"
-
-                    _, gt, _, nodata, array_numpy = numpy_read(temp_processed)
-
-                    array_numpy[array_numpy==nodata] = 0
-
-                    # convert to 8 bit and invert values
-                    array_numpy = -(array_numpy.astype(numpy.uint8)-255)
-                    array_numpy[array_numpy==0] = 255
-
-                    #print array_numpy.shape
-
-                    processed_numpy = array_numpy
-                    #print processed_numpy[1][3]
-
-                    numpy_save(processed_numpy, target, save_offsetx, save_offsety, save_xsize, save_ysize, gt, nodata, ot)
-
-                if (parsed.method == "fillnodata"):
-                    process_fillnodata = "gdal_fillnodata.py %s %s > /dev/null" %(temp_metatile, temp_processed)
-                    os.system(process_fillnodata)
-
-                    tiff_save(temp_processed, target, save_offsetx, save_offsety, save_xsize, save_ysize, nodata, ot)
-
-                if (parsed.method == "rescale"):
-                    interpolation = parsed.i
-
-                    scalefactor = xresolution/tile_xsize
-                    rescaled_xsize = int(metatile_xsize*xscale)
-                    rescaled_ysize = int(metatile_ysize*yscale)
-                    #print rescaled_xsize, rescaled_ysize
-
-                    process_rescale = "gdalwarp -ts %s %s -r %s -overwrite %s -of GTiff %s -srcnodata %s -dstnodata %s -multi > /dev/null" %(rescaled_xsize, rescaled_ysize, interpolation, temp_metatile, temp_processed, nodata, nodata)
-                    #print process_rescale
-                    os.system(process_rescale)
-
-                    save_offsetx = int(save_offsetx*xscale)
-                    save_offsety = int(save_offsety*yscale)
-                    save_xsize = int(save_xsize*xscale)
-                    save_ysize = int(save_ysize*yscale)
-
-                    tiff_save(temp_processed, target, save_offsetx, save_offsety, save_xsize, save_ysize, nodata, ot)
-
-                if (parsed.method == "tiling"):
-                    temp_processed = temp_metatile
-
-                    tiff_save(temp_processed, target, save_offsetx, save_offsety, save_xsize, save_ysize, nodata, ot)                    
+                loaded_plugins[parsed.method].process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_offsety, save_xsize, save_ysize, nodata, ot, metatile_xsize, metatile_ysize)
 
                 print "tile processed\n"
 
@@ -312,43 +226,6 @@ def main(args):
     os.remove(temp_metatile)
     os.remove(temp_processed)
 
-def tiff_save(temp_processed, target, save_offsetx, save_offsety, save_xsize, save_ysize, nodata, ot):
-    save_tile = "gdal_translate -co compress=lzw %s -of GTiff %s -srcwin %s %s %s %s -a_nodata %s %s > /dev/null" %(temp_processed, target, save_offsetx, save_offsety, save_xsize, save_ysize, nodata, ot)
-    #print save_tile
-    os.system(save_tile)
-
-def numpy_read(gtiff):
-    temp_ds = gdal.Open(gtiff, GA_ReadOnly)
-    temp_geotransform = temp_ds.GetGeoTransform()
-
-    temp_band = temp_ds.GetRasterBand(1)
-    temp_nodata = int(temp_band.GetNoDataValue() or 0)
-    temp_data = numpy.array(temp_band.ReadAsArray())
-
-    return temp_ds, temp_geotransform, temp_band, temp_nodata, temp_data
-
-def numpy_save(processed_numpy, target, save_offsetx, save_offsety, save_xsize, save_ysize, geotransform_original, nodata, ot):
-
-    cut_array = processed_numpy[save_offsety:save_offsety + save_ysize, save_offsetx:save_offsetx + save_xsize]
-
-    geotransform = [
-        geotransform_original[0] + geotransform_original[1] * save_offsetx,
-        geotransform_original[1],
-        geotransform_original[2],
-        geotransform_original[3] + geotransform_original[5] * save_offsety,
-        geotransform_original[4],
-        geotransform_original[5]
-    ]
-
-    output_raster = gdal.GetDriverByName('GTiff').Create(target, save_xsize, save_ysize, 1, gdal.GDT_Byte)  # Open the file
-    output_raster.SetGeoTransform(geotransform)  # Specify its coordinates
-    srs = osr.SpatialReference()                 # Establish its coordinate encoding
-    srs.ImportFromEPSG(4326)                     # This one specifies WGS84 lat long.
-                                                 # Anyone know how to specify the 
-                                                 # IAU2000:49900 Mars encoding?
-    output_raster.SetProjection( srs.ExportToWkt() )   # Exports the coordinate system 
-                                                       # to the file
-    output_raster.GetRasterBand(1).WriteArray(cut_array)   # Writes my array to the raster
 
 if __name__ == "__main__":
         main(sys.argv[1:])
