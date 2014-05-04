@@ -35,8 +35,8 @@ def numpy_save(processed_numpy, target, save_offsetx, save_offsety, save_xsize, 
         geotransform_original[4],
         geotransform_original[5]
     ]
-
-    output_raster = gdal.GetDriverByName('GTiff').Create(target, save_xsize, save_ysize, 1, gdal.GDT_Byte)  # Open the file
+    # !! DIRTY: output type set to Int16
+    output_raster = gdal.GetDriverByName('GTiff').Create(target, save_xsize, save_ysize, 1, gdal.GDT_Int16)  # Open the file
     output_raster.SetGeoTransform(geotransform)  # Specify its coordinates
     srs = osr.SpatialReference()                 # Establish its coordinate encoding
     srs.ImportFromEPSG(4326)                     # This one specifies WGS84 lat long.
