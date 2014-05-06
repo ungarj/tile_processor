@@ -8,7 +8,7 @@ def config_subparser(dem_merge_parser):
     dem_merge_parser.add_argument("-voids", required=True)
     dem_merge_parser.add_argument("-secondary", required=True)
     dem_merge_parser.add_argument("-tertiary", required=False)
-    dem_merge_parser.add_argument("-landpolygon", required=False)
+    dem_merge_parser.add_argument("-landmask", required=False)
 
 def process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_offsety, save_xsize, save_ysize, nodata, ot, *args, **kwargs):
 
@@ -26,7 +26,7 @@ def process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_of
     void_mask = parsed.voids
     secondary_source = parsed.secondary
     tertiary_source = parsed.tertiary
-    landpolygon = parsed.landpolygon
+    landmask = parsed.landmask
 
     nodata = 0
     ot = "-ot Int16"
@@ -65,36 +65,22 @@ def process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_of
 
     processed_numpy = numpy.where(void_mask_raster != 0, primary_dem, secondary_dem)
 
-    # clip
-    ## gdalwarp -cutline -cl 
-
     # clean up
     os.remove(temp_voids)
     os.remove(temp_voids_raster)
     os.remove(temp_secondary)
     
-    if landpolygon:
-        temp_preclip = tempfile.mktemp() #"/tmp/tmp_secondary_%s" % os.getpid()
-        with open(temp_voids, "w+"):
-           pass
-        numpy_save(processed_numpy, temp_preclip, save_offsetx, save_offsety, save_xsize, save_ysize, gt, nodata, ot)
+    if landmask:
+        # read mask to numpy
+        temp_landmask = tempfile.mktemp() #"/tmp/tmp_voids_raster_%s.tif" % os.getpid()
+        with open(temp_landmask, "w+"):
+            pass
+        clip_landmask = "gdal_translate -projwin %s %s %s %s %s %s" %(ulx, uly, lrx, lry, landmask, temp_landmask)
+        print clip_landmask
+        os.system(clip_landmask)
+        _, gt, _, nodata, numpy_landmask = numpy_read(temp_landmask)
+        os.remove(temp_landmask)
 
-        temp_landpolygon = tempfile.mktemp() + ".geojson" #"tmp_voids_%s.geojson" % os.getpid()
-        with open(temp_landpolygon, "w+"):
-            pass        
-        os.remove(temp_landpolygon)
-        clip_landpolygon = "ogr2ogr -overwrite -f 'GeoJSON' %s %s -clipsrc %s %s %s %s" %(temp_landpolygon, landpolygon, llx, lly, urx, ury)
-        print "%s: clipping landpolygon" %(target)
-        os.system(clip_landpolygon)
+        processed_numpy = numpy.where(numpy_landmask == 1, processed_numpy, 0)
 
-        clip_processed = "gdalwarp -dstnodata %s -cutline %s %s %s" %(nodata, temp_landpolygon, temp_preclip, target)
-        print "%s: clipping to landpolygon" %(target)
-        os.system(clip_processed)
-
-        os.remove(temp_landpolygon)
-
-        tiff_save(temp_processed, target, save_offsetx, save_offsety, save_xsize, save_ysize, nodata, ot)
-
-        os.remove(temp_preclip)
-    else:
-        numpy_save(processed_numpy, target, save_offsetx, save_offsety, save_xsize, save_ysize, gt, nodata, ot)
+    numpy_save(processed_numpy, target, save_offsetx, save_offsety, save_xsize, save_ysize, gt, nodata, ot)
