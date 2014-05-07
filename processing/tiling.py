@@ -157,9 +157,9 @@ def worker((i, j), parsed, tile_count_x, tile_count_y, margin, vrt_xsize, vrt_ys
     tile_offsety = SOURCE_Y + j*tile_ysize
 
     # reduce tile size if end of column/row                
-    if i==tile_count_x-1 and (vrt_xsize-(i*tile_xsize)!=0):
+    if i==tile_count_x-1 and (vrt_xsize-((i*tile_xsize)+margin)!=0):
         tile_xsize = vrt_xsize-i*tile_xsize            
-    if j==tile_count_y-1 and (vrt_ysize-(j*tile_ysize)!=0):
+    if j==tile_count_y-1 and (vrt_ysize-((j*tile_ysize)+margin)!=0):
         tile_ysize = vrt_ysize-j*tile_ysize
 
     #calculate metatile boundaries
