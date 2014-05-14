@@ -10,7 +10,9 @@ def config_subparser(contour):
 
 def process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_offsety, save_xsize, save_ysize, nodata, ot, *args, **kwargs):
 
-    target_db = target.split(".")[0] + ".sqlite"
+    #target_db = target.split(".")[0] + ".sqlite"
+    target_db = "geodata"
+
     elevation = parsed.elevation
     median = parsed.median
     nodata = 0
@@ -24,25 +26,28 @@ def process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_of
 
     # geotransform values for tile
     xmin = gt[0] + (save_offsetx * gt[1])
-    ymin = gt[3] + ((save_offsety + save_ysize) * gt[5])
     xmax = gt[0] + ((save_offsetx + save_xsize) * gt[1])
+    ymin = gt[3] + ((save_offsety + save_ysize) * gt[5])
     ymax = gt[3] + (save_offsety * gt[5])
 
     # geotransform values for metatile
     save_offsetx = 0
     save_offsety = 0
-    save_xsize = processed_numpy.shape[0]
-    save_ysize = processed_numpy.shape[1]
+    save_xsize = processed_numpy.shape[1]
+    save_ysize = processed_numpy.shape[0]
     numpy_save(processed_numpy, temp_metatile, save_offsetx, save_offsety, save_xsize, save_ysize, gt, nodata, ot)
 
     temp_target = "/tmp/temp_target_%s.sqlite" % os.getpid()
 
     process_contours = "gdal_contour -f 'SQLite' -i %s -a elev %s %s" %(elevation, temp_metatile, temp_target)
-    #print process_contours
+    #process_contours = "gdal_contour -f 'SQLite' -i %s -a elev %s %s" %(elevation, temp_metatile, target_db)
+    print process_contours
     os.system(process_contours)
 
-    clip_contours ="ogr2ogr -f 'SQLite' -clipsrc %s %s %s %s %s %s" %(xmin, ymin, xmax, ymax, target_db, temp_target)
+    #clip_contours ="ogr2ogr -f 'SQLite' -clipsrc %s %s %s %s %s %s" %(xmin, ymin, xmax, ymax, target_db, temp_target)
+    clip_contours ="ogr2ogr -clipsrc %s %s %s %s -f PostgreSQL PG:'dbname=%s' -skipfailures -append -nlt MULTILINESTRING %s" %(xmin, ymin, xmax, ymax, target_db, temp_target)
+    print clip_contours
     os.system(clip_contours)
 
-    os.remove(target)
+    #os.remove(target)
     os.remove(temp_target)
