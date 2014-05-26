@@ -90,7 +90,7 @@ def process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_of
     # PostGIS connection
     #connection = db.connect('contours.sqlite')
     connection = psycopg2.connect(database = 'geodata', user = 'ungarj')
-    # psql -d geodata -c "DROP TABLE contours; CREATE TABLE contours (id bigserial primary key, elev double precision, type text, wkb_geometry geometry);"
+    # psql -d geodata -c "DROP TABLE contours; CREATE TABLE contours (id bigserial primary key, elev double precision, type text);  SELECT AddGeometryColumn ('','contours','the_geom',4326,'MULTILINESTRING',25D);"
     cursor = connection.cursor()
 
     if glacier_mask:
@@ -116,7 +116,7 @@ def process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_of
             feature = glacier_clipped.GetFeature(i)  
             elev = feature.GetField("elev")
             wkt = feature.GetGeometryRef().ExportToWkt() 
-            cursor.execute("INSERT INTO contours (elev,wkb_geometry,type) " +"VALUES (%s, ST_GeomFromText(%s, " +"4326), %s)", (str(elev), wkt, contour_type))
+            cursor.execute("INSERT INTO contours (elev,the_geom,type) " +"VALUES (%s, ST_GeomFromText(%s, " +"4326), %s)", (str(elev), wkt, contour_type))
 
         connection.commit()  
 
@@ -136,7 +136,7 @@ def process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_of
             feature = land_clipped.GetFeature(i)  
             elev = feature.GetField("elev")
             wkt = feature.GetGeometryRef().ExportToWkt() 
-            cursor.execute("INSERT INTO contours (elev,wkb_geometry,type) " +"VALUES (%s, ST_GeomFromText(%s, " +"4326), %s)", (str(elev), wkt, contour_type))
+            cursor.execute("INSERT INTO contours (elev,the_geom,type) " +"VALUES (%s, ST_GeomFromText(%s, " +"4326), %s)", (str(elev), wkt, contour_type))
 
         connection.commit()  
 
