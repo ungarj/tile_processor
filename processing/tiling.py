@@ -129,7 +129,9 @@ def main(args):
 
 
     pool = Pool(multi)
-    pool.map(f, tiles)
+    errors = pool.map(f, tiles)
+
+    print errors
 
     # create VRT
     if parsed.create_vrt:
@@ -140,122 +142,128 @@ def main(args):
         os.system(create_vrt)
 
 def worker((i, j), parsed, tile_count_x, tile_count_y, margin, vrt_xsize, vrt_ysize, source, dest, source_vrt):
+    try:
+        temp_metatile = "/tmp/tmp_metatile_%s.tif" % os.getpid() #= tempfile.mktemp()#= "temp_metatile.tif"
+        temp_processed = "/tmp/tmp_processed_%s.tif" % os.getpid()#= tempfile.mktemp() #"temp_processed.tif"
 
-    temp_metatile = "/tmp/tmp_metatile_%s.tif" % os.getpid() #= tempfile.mktemp()#= "temp_metatile.tif"
-    temp_processed = "/tmp/tmp_processed_%s.tif" % os.getpid()#= tempfile.mktemp() #"temp_processed.tif"
+        with open(temp_metatile, "w+"):
+            pass
+        with open(temp_processed, "w+"):
+            pass
 
-    with open(temp_metatile, "w+"):
-        pass
-    with open(temp_processed, "w+"):
-        pass
+        tile_xsize = parsed.tile_xsize[0]
+        tile_ysize = parsed.tile_ysize[0]
 
-    tile_xsize = parsed.tile_xsize[0]
-    tile_ysize = parsed.tile_ysize[0]
+        # determine tile boundaries
+        tile_offsetx = SOURCE_X + i*tile_xsize
+        tile_offsety = SOURCE_Y + j*tile_ysize
 
-    # determine tile boundaries
-    tile_offsetx = SOURCE_X + i*tile_xsize
-    tile_offsety = SOURCE_Y + j*tile_ysize
+        # reduce tile size if end of column/row                
+        if i==tile_count_x-1 and (vrt_xsize-((i*tile_xsize))!=0):
+            tile_xsize = vrt_xsize-i*tile_xsize            
+        if j==tile_count_y-1 and (vrt_ysize-((j*tile_ysize))!=0):
+            tile_ysize = vrt_ysize-j*tile_ysize
 
-    # reduce tile size if end of column/row                
-    if i==tile_count_x-1 and (vrt_xsize-((i*tile_xsize))!=0):
-        tile_xsize = vrt_xsize-i*tile_xsize            
-    if j==tile_count_y-1 and (vrt_ysize-((j*tile_ysize))!=0):
-        tile_ysize = vrt_ysize-j*tile_ysize
+        #calculate metatile boundaries
+        metatile_offsetx = tile_offsetx - margin
+        metatile_xsize = tile_xsize + 2 * margin
 
-    #calculate metatile boundaries
-    metatile_offsetx = tile_offsetx - margin
-    metatile_xsize = tile_xsize + 2 * margin
+        metatile_offsety = tile_offsety - margin
+        metatile_ysize = tile_ysize + 2 * margin
 
-    metatile_offsety = tile_offsety - margin
-    metatile_ysize = tile_ysize + 2 * margin
+        #TODO crop to tile boundaries & save
+        save_offsetx = margin
+        save_offsety = margin
+        save_xsize = tile_xsize
+        save_ysize = tile_ysize
+            
+        # clip metatile if outside of input file's boundaries
+        # if negative, set save_offset to 0 and make metatile-margin
+        # if out of max, make metatile-margin
+        if (metatile_offsetx<0):
+            metatile_offsetx=0
+            save_offsetx=0
+            metatile_xsize=metatile_xsize-margin
 
-    #TODO crop to tile boundaries & save
-    save_offsetx = margin
-    save_offsety = margin
-    save_xsize = tile_xsize
-    save_ysize = tile_ysize
+        if (metatile_offsety<0):
+            metatile_offsety=0
+            save_offsety=0
+            metatile_ysize=metatile_ysize-margin
+
+        if (metatile_offsetx+metatile_xsize > vrt_xsize):
+            metatile_xsize = metatile_xsize - margin
+
+        if (metatile_offsety+metatile_ysize > vrt_ysize):
+            metatile_ysize = metatile_ysize - margin
+
+        ds = gdal.Open(source)
+        band = ds.GetRasterBand(1)
+        nodata = int(band.GetNoDataValue() or 0)
+        data = numpy.array(band.ReadAsArray(tile_offsetx, tile_offsety, tile_xsize, tile_ysize))
+
+
+        # define output tile name
+        target = dest+"X"+str(i).zfill(DIGITS)+"Y"+str(j).zfill(DIGITS)+".tif"
+
+        ot = ""
+
+        if parsed.naming_srtm:
+            geotransform = ds.GetGeoTransform(1)
+            xpixelsize = geotransform[1]
+            ypixelsize = geotransform[5]
+            xorigin = geotransform[0]
+            yorigin = geotransform[3]
+            lon_character = "E"
+            lat_character = "N"
+
+            lon_number = int(round(xorigin + xpixelsize*tile_offsetx))
+            if lon_number<0:
+                lon_number=-lon_number
+                lon_character = "W"
+
+            lat_number = int(round(yorigin + ypixelsize*(tile_offsety+tile_ysize)))
+            if lat_number<0:
+                lat_number=-lat_number
+                lat_character = "S"
+
+            target = dest+lat_character+str(lat_number).zfill(2)+lon_character+str(lon_number).zfill(3)+".tif"
+
+        tile_exists = False
+        if parsed.resume:
+            #check whether target tile exists
+            tile_exists = os.path.isfile(target)
         
-    # clip metatile if outside of input file's boundaries
-    # if negative, set save_offset to 0 and make metatile-margin
-    # if out of max, make metatile-margin
-    if (metatile_offsetx<0):
-        metatile_offsetx=0
-        save_offsetx=0
-        metatile_xsize=metatile_xsize-margin
+        print "\n"
+        print "processing tile " + target
 
-    if (metatile_offsety<0):
-        metatile_offsety=0
-        save_offsety=0
-        metatile_ysize=metatile_ysize-margin
+        # skip if tile is empty
+        data[data==0]=nodata
+        if numpy.all(data==nodata):
+            print "source data empty, skipping"
+        elif (tile_exists==True):
+            print "tile exists, skipping"    
+        else:           
+            if not os.path.exists(dest):
+                os.makedirs(dest) 
+            open(target, 'a').close()     
 
-    if (metatile_offsetx+metatile_xsize > vrt_xsize):
-        metatile_xsize = metatile_xsize - margin
+            save_metatile = "gdal_translate %s -of GTiff %s -srcwin %s %s %s %s > /dev/null" %(source_vrt, temp_metatile, metatile_offsetx, metatile_offsety, metatile_xsize, metatile_ysize)
+            os.system(save_metatile)
+            
+            loaded_plugins[parsed.method].process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_offsety, save_xsize, save_ysize, nodata, ot, metatile_xsize, metatile_ysize)
 
-    if (metatile_offsety+metatile_ysize > vrt_ysize):
-        metatile_ysize = metatile_ysize - margin
+            print "tile processed\n"
 
-    ds = gdal.Open(source)
-    band = ds.GetRasterBand(1)
-    nodata = int(band.GetNoDataValue() or 0)
-    data = numpy.array(band.ReadAsArray(tile_offsetx, tile_offsety, tile_xsize, tile_ysize))
+    except Exception, e:
+        return target
+    else:
+        pass
+    finally:
+        # clean up
+        os.remove(temp_metatile)
+        os.remove(temp_processed)
 
-
-    # define output tile name
-    target = dest+"X"+str(i).zfill(DIGITS)+"Y"+str(j).zfill(DIGITS)+".tif"
-
-    ot = ""
-
-    if parsed.naming_srtm:
-        geotransform = ds.GetGeoTransform(1)
-        xpixelsize = geotransform[1]
-        ypixelsize = geotransform[5]
-        xorigin = geotransform[0]
-        yorigin = geotransform[3]
-        lon_character = "E"
-        lat_character = "N"
-
-        lon_number = int(round(xorigin + xpixelsize*tile_offsetx))
-        if lon_number<0:
-            lon_number=-lon_number
-            lon_character = "W"
-
-        lat_number = int(round(yorigin + ypixelsize*(tile_offsety+tile_ysize)))
-        if lat_number<0:
-            lat_number=-lat_number
-            lat_character = "S"
-
-        target = dest+lat_character+str(lat_number).zfill(2)+lon_character+str(lon_number).zfill(3)+".tif"
-
-    tile_exists = False
-    if parsed.resume:
-        #check whether target tile exists
-        tile_exists = os.path.isfile(target)
-    
-    print "\n"
-    print "processing tile " + target
-
-    # skip if tile is empty
-    data[data==0]=nodata
-    if numpy.all(data==nodata):
-        print "source data empty, skipping"
-    elif (tile_exists==True):
-        print "tile exists, skipping"    
-    else:           
-        if not os.path.exists(dest):
-            os.makedirs(dest) 
-        open(target, 'a').close()     
-
-        save_metatile = "gdal_translate %s -of GTiff %s -srcwin %s %s %s %s > /dev/null" %(source_vrt, temp_metatile, metatile_offsetx, metatile_offsety, metatile_xsize, metatile_ysize)
-        os.system(save_metatile)
-        
-        loaded_plugins[parsed.method].process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_offsety, save_xsize, save_ysize, nodata, ot, metatile_xsize, metatile_ysize)
-
-        print "tile processed\n"
-
-    # clean up
-    os.remove(temp_metatile)
-    os.remove(temp_processed)
-
+    return True
 
 if __name__ == "__main__":
         main(sys.argv[1:])
