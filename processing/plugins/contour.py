@@ -4,7 +4,7 @@ from scipy import ndimage
 import numpy
 from osgeo import ogr, gdal, gdal_array
 import psycopg2
-from pyspatialite import dbapi2 as db
+#from pyspatialite import dbapi2 as db
 
 def config_subparser(contour):
     contour.add_argument("-elevation", required=True)
@@ -26,7 +26,7 @@ def process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_of
     processed_numpy = ndimage.median_filter(array_numpy, size=median)
     #processed_numpy = array_numpy
     #print "save processed_numpy"
-    print str(processed_numpy.shape[0]) + " " + str(processed_numpy.shape[1])
+    #print str(processed_numpy.shape[0]) + " " + str(processed_numpy.shape[1])
 
     # geotransform values for tile
     xmin = gt[0] + (save_offsetx * gt[1])
@@ -100,7 +100,7 @@ def process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_of
         dataSource = driver.Open(shapefile, 0)
         glacier_layer = dataSource.GetLayer()
 
-        print "processing glacier contours"    
+        #print "processing glacier contours"    
         # clip & save glacier contours
         glacier_clipped = ogr_ds.CreateLayer('contour_clipped', geom_type = ogr.wkbLineString25D)
         field_defn = ogr.FieldDefn('ID', ogr.OFTInteger)
@@ -116,11 +116,10 @@ def process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_of
             feature = glacier_clipped.GetFeature(i)  
             elev = feature.GetField("elev")
             wkt = feature.GetGeometryRef().ExportToWkt() 
-            cursor.execute("INSERT INTO contours (elev,the_geom,type) " +"VALUES (%s, ST_GeomFromText(%s, " +"4326), %s)", (str(elev), wkt, contour_type))
+            cursor.execute("INSERT INTO contours (elev,the_geom,type) VALUES (%s, ST_Multi(ST_GeomFromText(%s, " +"4326)), %s)", (str(elev), wkt, contour_type))
+        connection.commit()
 
-        connection.commit()  
-
-        print "processing land contours"
+        #print "processing land contours"
         # clip & save land contours
         land_clipped = ogr_ds.CreateLayer('contour_clipped', geom_type = ogr.wkbLineString25D)
         field_defn = ogr.FieldDefn('ID', ogr.OFTInteger)
@@ -136,18 +135,17 @@ def process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_of
             feature = land_clipped.GetFeature(i)  
             elev = feature.GetField("elev")
             wkt = feature.GetGeometryRef().ExportToWkt() 
-            cursor.execute("INSERT INTO contours (elev,the_geom,type) " +"VALUES (%s, ST_GeomFromText(%s, " +"4326), %s)", (str(elev), wkt, contour_type))
-
+            cursor.execute("INSERT INTO contours (elev,the_geom,type) VALUES (%s, ST_Multi(ST_GeomFromText(%s, " +"4326)), %s)", (str(elev), wkt, contour_type))
         connection.commit()  
 
+    
     else:
         # save to POSTGIS
         for i in range(clipped.GetFeatureCount()):  
             feature = clipped.GetFeature(i)  
             elev = feature.GetField("elev")
             wkt = feature.GetGeometryRef().ExportToWkt() 
-            cursor.execute("INSERT INTO contours (elev,wkb_geometry) " +"VALUES (%s, ST_GeomFromText(%s, " +"4326))", (str(elev), wkt))
-    
+            cursor.execute("INSERT INTO contours (elev,the_geom) VALUES (%s, ST_Multi(ST_GeomFromText(%s, " +"4326)))", (str(elev), wkt))
         connection.commit()  
 
   
