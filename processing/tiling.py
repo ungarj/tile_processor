@@ -131,7 +131,8 @@ def main(args):
     pool = Pool(multi)
     errors = pool.map(f, tiles)
 
-    print errors
+    #for error in errors:
+    #    print "%s: %s \n" %(error[0], error[1])
 
     # create VRT
     if parsed.create_vrt:
@@ -233,15 +234,19 @@ def worker((i, j), parsed, tile_count_x, tile_count_y, margin, vrt_xsize, vrt_ys
             #check whether target tile exists
             tile_exists = os.path.isfile(target)
         
-        print "\n"
-        print "processing tile " + target
+        #print "\n"
+        #print "processing tile " + target
 
         # skip if tile is empty
         data[data==0]=nodata
         if numpy.all(data==nodata):
-            print "source data empty, skipping"
+            #print "source data empty, skipping"
+            message = "source data empty"
+            pass
         elif (tile_exists==True):
-            print "tile exists, skipping"    
+            #print "tile exists, skipping"
+            message = "tile exists" 
+            pass
         else:           
             if not os.path.exists(dest):
                 os.makedirs(dest) 
@@ -252,18 +257,23 @@ def worker((i, j), parsed, tile_count_x, tile_count_y, margin, vrt_xsize, vrt_ys
             
             loaded_plugins[parsed.method].process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_offsety, save_xsize, save_ysize, nodata, ot, metatile_xsize, metatile_ysize)
 
-            print "tile processed\n"
+            #print "tile processed\n"
+            message = "successfully processed"
 
     except Exception, e:
-        return target
+        print "%s: %s " %(target, e)
+        return target, e
     else:
         pass
     finally:
         # clean up
         os.remove(temp_metatile)
         os.remove(temp_processed)
+    print "%s: %s \n" %(target, message)
+    return target, "ok"
+    
 
-    return True
+    
 
 if __name__ == "__main__":
         main(sys.argv[1:])
