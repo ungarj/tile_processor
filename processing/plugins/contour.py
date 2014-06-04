@@ -14,7 +14,8 @@ def config_subparser(contour):
 def process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_offsety, save_xsize, save_ysize, nodata, ot, *args, **kwargs):
 
     #target_db = target.split(".")[0] + ".sqlite"
-    target_db = "geodata"
+    targetdb = "geodata"
+    dbuser = "ungarj"
 
     elevation = int(parsed.elevation)
     median = int(parsed.median)
@@ -90,7 +91,7 @@ def process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_of
 
     # PostGIS connection
     #connection = db.connect('contours.sqlite')
-    connection = psycopg2.connect(database = 'geodata', user = 'ungarj')
+    connection = psycopg2.connect(database = targetdb, user = dbuser)
     # psql -d geodata -c "DROP TABLE contours; CREATE TABLE contours (id bigserial primary key, elev double precision, type text);  SELECT AddGeometryColumn ('','contours','the_geom',4326,'MULTILINESTRING',2);"
     cursor = connection.cursor()
 
