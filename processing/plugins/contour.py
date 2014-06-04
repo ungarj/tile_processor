@@ -101,35 +101,9 @@ def process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_of
         dataSource = driver.Open(shapefile, 0)
         glacier_layer = dataSource.GetLayer()
 
-        #print "processing glacier contours"    
-        # clip & save glacier contours
-        glacier_clipped = ogr_ds.CreateLayer('glacier_clipped', geom_type=ogr.wkbMultiLineString)
-        field_defn = ogr.FieldDefn('ID', ogr.OFTInteger)
-        glacier_clipped.CreateField(field_defn)
-        field_defn = ogr.FieldDefn('elev', ogr.OFTReal)
-        glacier_clipped.CreateField(field_defn)
-    
-        clipped.Clip(glacier_layer, glacier_clipped)
+        glacier_layer_clipped = ogr_ds.CreateLayer('glacier_clipped', geom_type=ogr.wkbPolygon)
 
-        contour_type = "glaciated"
-
-        for i in range(glacier_clipped.GetFeatureCount()):  
-            feature = glacier_clipped.GetFeature(i)  
-            geometry = feature.GetGeometryRef()
-            # hack removing loose points from geometry
-            if geometry.GetGeometryName() == "POINT" :
-                continue
-            if geometry.GetGeometryName() == "GEOMETRYCOLLECTION" :
-                geometry_new = ogr.Geometry(ogr.wkbMultiLineString)
-                for i in xrange(geometry.GetGeometryCount()): 
-                    g = geometry.GetGeometryRef(i)
-                    if g.GetGeometryName() == "LINESTRING" :
-                        geometry_new.AddGeometry(g.Clone())
-                geometry = geometry_new
-            elev = feature.GetField("elev")
-            wkt = geometry.ExportToWkt() 
-            cursor.execute("INSERT INTO contours (elev,the_geom,type) VALUES (%s, ST_Multi(ST_GeomFromText(%s, " +"4326)), %s)", (str(elev), wkt, contour_type))
-        connection.commit()
+        glacier_layer.Clip(cliplayer, glacier_layer_clipped)
 
         #print "processing land contours"
         # clip & save land contours
@@ -138,8 +112,15 @@ def process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_of
         land_clipped.CreateField(field_defn)
         field_defn = ogr.FieldDefn('elev', ogr.OFTReal)
         land_clipped.CreateField(field_defn)
-    
-        clipped.Erase(glacier_layer, land_clipped)
+
+        if glacier_layer_clipped.GetFeatureCount() == 0:
+            land_clipped = clipped
+        else:
+            # create inverse clip
+            inverse_clip = ogr_ds.CreateLayer('inverse_clip', geom_type=ogr.wkbPolygon)
+            cliplayer.Erase(glacier_layer_clipped, inverse_clip)
+            clipped.Clip(inverse_clip, land_clipped)
+
 
         contour_type = "land"
 
@@ -147,7 +128,7 @@ def process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_of
             feature = land_clipped.GetFeature(i)  
             geometry = feature.GetGeometryRef()
             # hack removing loose points from geometry
-            if geometry.GetGeometryName() == "POINT" :
+            if geometry.GetGeometryName() in ("POINT", "MULTIPOINT") :
                 continue
             if geometry.GetGeometryName() == "GEOMETRYCOLLECTION" :
                 geometry_new = ogr.Geometry(ogr.wkbMultiLineString)
@@ -161,6 +142,37 @@ def process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_of
             cursor.execute("INSERT INTO contours (elev,the_geom,type) VALUES (%s, ST_Multi(ST_GeomFromText(%s, " +"4326)), %s)", (str(elev), wkt, contour_type))
         connection.commit()  
 
+
+        #print "processing glacier contours"    
+        # clip & save glacier contours
+        glacier_clipped = ogr_ds.CreateLayer('glacier_clipped', geom_type=ogr.wkbMultiLineString)
+        field_defn = ogr.FieldDefn('ID', ogr.OFTInteger)
+        glacier_clipped.CreateField(field_defn)
+        field_defn = ogr.FieldDefn('elev', ogr.OFTReal)
+        glacier_clipped.CreateField(field_defn)
+    
+        clipped.Clip(glacier_layer_clipped, glacier_clipped)
+
+        contour_type = "glaciated"
+
+        for i in range(glacier_clipped.GetFeatureCount()):  
+            feature = glacier_clipped.GetFeature(i)  
+            geometry = feature.GetGeometryRef()
+            # hack removing loose points from geometry
+            if geometry.GetGeometryName() in ("POINT", "MULTIPOINT") :
+                continue
+            if geometry.GetGeometryName() == "GEOMETRYCOLLECTION" :
+                geometry_new = ogr.Geometry(ogr.wkbMultiLineString)
+                for i in xrange(geometry.GetGeometryCount()): 
+                    g = geometry.GetGeometryRef(i)
+                    if g.GetGeometryName() == "LINESTRING" :
+                        geometry_new.AddGeometry(g.Clone())
+                geometry = geometry_new
+            elev = feature.GetField("elev")
+            wkt = geometry.ExportToWkt() 
+            cursor.execute("INSERT INTO contours (elev,the_geom,type) VALUES (%s, ST_Multi(ST_GeomFromText(%s, " +"4326)), %s)", (str(elev), wkt, contour_type))
+        connection.commit()
+
     
     else:
         # save to POSTGIS
@@ -168,7 +180,7 @@ def process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_of
             feature = clipped.GetFeature(i)
             geometry = feature.GetGeometryRef()
             # hack removing loose points from geometry
-            if geometry.GetGeometryName() == "POINT" :
+            if geometry.GetGeometryName() in ("POINT", "MULTIPOINT") :
                 continue
             if geometry.GetGeometryName() == "GEOMETRYCOLLECTION" :
                 geometry_new = ogr.Geometry(ogr.wkbMultiLineString)
