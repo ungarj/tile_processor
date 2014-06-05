@@ -191,7 +191,6 @@ def process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_of
             wkt = geometry.ExportToWkt() 
             cursor.execute("INSERT INTO contours (elev,the_geom,type) VALUES (%s, ST_Multi(ST_GeomFromText(%s, " +"4326)), %s)", (str(elev), wkt, contour_type))
         connection.commit()
-
     
     else:
         # save to POSTGIS
@@ -225,7 +224,10 @@ def process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_of
      - with clipping ~1m35s
     '''
 
-
+    
+    ogr_ds.Destroy()
+    processed_numpy = []
+    mem_ds = None
     #os.remove(target)
     #os.remove(temp_target)
 
