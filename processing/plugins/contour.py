@@ -65,6 +65,22 @@ def process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_of
     # write contours to OGR layer
     gdal.ContourGenerate(mem_ds.GetRasterBand(1), elevation, 0, [], 0, 0, ogr_lyr, 0, 1)
 
+    # convert 3D geometries to 2D
+    for i in range(ogr_lyr.GetFeatureCount()):  
+        feature = ogr_lyr.GetFeature(i)  
+        geometry = feature.GetGeometryRef()
+        #print geometry.GetCoordinateDimension()
+        #geometry_new = ogr.Geometry(ogr.wkbMultiLineString)
+        #geometry_new.AddGeometry(geometry)
+        geometry.SetCoordinateDimension(2)
+        #print geometry.ExportToWkt()
+        #for k in xrange(geometry.GetGeometryCount()): 
+        #    g = geometry.GetGeometryRef(k)
+        #    print "herbert"
+        #    geometry_new.AddGeometry(g.Clone().SetCoordinateDimension(2))
+        #    print g.GetCoordinateDimension()
+        #geometry = geometry_new.Clone()
+
     # clip to tile boundary
     ring = ogr.Geometry(ogr.wkbLinearRing)
     ring.AddPoint(xmin, ymin)
@@ -139,6 +155,7 @@ def process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_of
                         geometry_new.AddGeometry(g.Clone())
                 geometry = geometry_new
             elev = feature.GetField("elev")
+            geometry.SetCoordinateDimension(2)
             wkt = geometry.ExportToWkt() 
             cursor.execute("INSERT INTO contours (elev,the_geom,type) VALUES (%s, ST_Multi(ST_GeomFromText(%s, " +"4326)), %s)", (str(elev), wkt, contour_type))
         connection.commit()  
@@ -170,6 +187,7 @@ def process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_of
                         geometry_new.AddGeometry(g.Clone())
                 geometry = geometry_new
             elev = feature.GetField("elev")
+            geometry.SetCoordinateDimension(2)
             wkt = geometry.ExportToWkt() 
             cursor.execute("INSERT INTO contours (elev,the_geom,type) VALUES (%s, ST_Multi(ST_GeomFromText(%s, " +"4326)), %s)", (str(elev), wkt, contour_type))
         connection.commit()
@@ -192,6 +210,7 @@ def process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_of
                 geometry = geometry_new
             elev = feature.GetField("elev")
             #feature_geometry = ogr.ForceToMultiLineString(feature.GetGeometryRef())
+            geometry.SetCoordinateDimension(2)
             wkt = geometry.ExportToWkt()
             cursor.execute("INSERT INTO contours (elev,the_geom) VALUES (%s, ST_Multi(ST_GeomFromText(%s, " +"4326)))", (str(elev), wkt))
         connection.commit()  
