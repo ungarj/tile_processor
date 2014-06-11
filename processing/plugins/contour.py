@@ -17,7 +17,7 @@ def process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_of
     #target_db = target.split(".")[0] + ".sqlite"
     targetdb = "geodata"
     dbuser = "ungarj"
-    targettable = parsed.table
+    targettable = str(parsed.table)
 
     elevation = int(parsed.elevation)
     median = int(parsed.median)
@@ -149,7 +149,7 @@ def process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_of
             elev = feature.GetField("elev")
             geometry.SetCoordinateDimension(2)
             wkt = geometry.ExportToWkt() 
-            cursor.execute("INSERT INTO %s (elev,the_geom,type) VALUES (%s, ST_Multi(ST_GeomFromText(%s, " +"4326)), %s)", (targettable, str(elev), wkt, contour_type))
+            cursor.execute("INSERT INTO " + targettable + " (elev,the_geom,type) VALUES (%s, ST_Multi(ST_GeomFromText(%s, " +"4326)), %s)", (elev, wkt, contour_type))
         connection.commit()  
 
 
@@ -181,7 +181,7 @@ def process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_of
             elev = feature.GetField("elev")
             geometry.SetCoordinateDimension(2)
             wkt = geometry.ExportToWkt() 
-            cursor.execute("INSERT INTO %s (elev,the_geom,type) VALUES (%s, ST_Multi(ST_GeomFromText(%s, " +"4326)), %s)", (targettable, str(elev), wkt, contour_type))
+            cursor.execute("INSERT INTO " + targettable + " (elev,the_geom,type) VALUES (%s, ST_Multi(ST_GeomFromText(%s, " +"4326)), %s)",(elev, wkt, contour_type))
         connection.commit()
     
     else:
@@ -203,7 +203,7 @@ def process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_of
             #feature_geometry = ogr.ForceToMultiLineString(feature.GetGeometryRef())
             geometry.SetCoordinateDimension(2)
             wkt = geometry.ExportToWkt()
-            cursor.execute("INSERT INTO %s (elev,the_geom) VALUES (%s, ST_Multi(ST_GeomFromText(%s, " +"4326)))", (targettable, str(elev), wkt))
+            cursor.execute("INSERT INTO " + targettable + " (elev,the_geom) VALUES (%s, ST_Multi(ST_GeomFromText(%s, " +"4326)))", (elev, wkt))
         connection.commit()  
 
     ogr_ds.Destroy()
