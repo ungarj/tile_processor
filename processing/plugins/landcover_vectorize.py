@@ -162,20 +162,22 @@ def process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_of
     field_defn = ogr.FieldDefn('type', ogr.OFTInteger)
     clipped.CreateField(field_defn)
 
-    ogr_lyr.Clip(cliplayer, clipped)
+    clipoptions = "PROMOTE_TO_MULTI=YES"
 
+    #ogr_lyr.Clip(cliplayer, clipped, clipoptions)
+    
     connection = psycopg2.connect(database = targetdb, user = dbuser)
     # psql -d geodata -c "DROP TABLE landcover; CREATE TABLE landcover (id bigserial primary key, typeid double precision, type text);  SELECT AddGeometryColumn ('','landcover','the_geom',4326,'MULTIPOLYGON',2);"
     cursor = connection.cursor()
 
 
-    for i in range(clipped.GetFeatureCount()):  
-        insert = True
-        feature = clipped.GetFeature(i)
+    for i in range(ogr_lyr.GetFeatureCount()):  
+        #insert = True
+        feature = ogr_lyr.GetFeature(i)
         geometry = feature.GetGeometryRef()
         #print geometry.GetGeometryName()
-        if geometry.GetGeometryName() in ("POLYGON", "MULTIPOLYGON") :
-            continue
+        #if geometry.GetGeometryName() in ("POLYGON", "MULTIPOLYGON") :
+            #continue
             #print "polygon"
         if geometry.GetGeometryName() == "GEOMETRYCOLLECTION" :
             geometry_new = ogr.Geometry(ogr.wkbMultiLineString)
@@ -187,23 +189,23 @@ def process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_of
                 else:
                     print g.GetGeometryName()
             geometry = geometry_new
-        if geometry.GetGeometryName() in ("LINESTRING", "MULTILINESTRING", "POINT", "MULTIPOINT") :
-            insert = False
+        #if geometry.GetGeometryName() in ("LINESTRING", "MULTILINESTRING", "POINT", "MULTIPOINT") :
+            #insert = False
+            #continue
 
-        if insert:
-            lctype = feature.GetField("type")
-            geometry.SetCoordinateDimension(2)
-            wkt = geometry.ExportToWkt()
-            cursor.execute("INSERT INTO " + targettable + " (type,the_geom) VALUES (%s, ST_Multi(ST_GeomFromText(%s, " +"4326)))", (lctype, wkt))
+        #if insert:
+        print "herbert"
+        lctype = feature.GetField("type")
+        geometry.SetCoordinateDimension(2)
+        wkt = geometry.ExportToWkt()
+        cursor.execute("INSERT INTO " + targettable + " (type,the_geom) VALUES (%s, ST_Multi(ST_GeomFromText(%s, " +"4326)))", (lctype, wkt))
     connection.commit()  
+
+    numpy_save(processed_numpy, target, save_offsetx, save_offsety, save_xsize, save_ysize, gt, nodata, ot)
 
     ogr_ds.Destroy()
     processed_numpy = []
     mem_ds = None
-
-
-
-    #numpy_save(processed_numpy, target, save_offsetx, save_offsety, save_xsize, save_ysize, gt, nodata, ot)
 
 
 
