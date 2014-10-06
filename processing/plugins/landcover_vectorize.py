@@ -194,7 +194,7 @@ def process(parsed, target, temp_metatile, temp_processed, save_offsetx, save_of
             #continue
 
         #if insert:
-        print "herbert"
+        #print "herbert"
         lctype = feature.GetField("type")
         geometry.SetCoordinateDimension(2)
         wkt = geometry.ExportToWkt()
